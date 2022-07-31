@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Guest&#39;s Blog</title>
+  
+  
+  <link href="https://www.guestblog.xyz/atom.xml" rel="self"/>
+  
+  <link href="https://www.guestblog.xyz/"/>
+  <updated>2022-07-31T12:11:53.462Z</updated>
+  <id>https://www.guestblog.xyz/</id>
+  
+  <author>
+    <name>Guest</name>
+    
+  </author>
+  
+  <generator uri="https://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>Wordpress SQL注入漏洞(CVE-2022-21661)分析</title>
+    <link href="https://www.guestblog.xyz/2022/02/23/CVE-2022-21661/"/>
+    <id>https://www.guestblog.xyz/2022/02/23/CVE-2022-21661/</id>
+    <published>2022-02-23T10:20:23.000Z</published>
+    <updated>2022-07-31T12:11:53.462Z</updated>
+    
+    
+    <summary type="html">&lt;h1 id=&quot;产品介绍&quot;&gt;&lt;a href=&quot;#产品介绍&quot; class=&quot;headerlink&quot; title=&quot;产品介绍&quot;&gt;&lt;/a&gt;&lt;strong&gt;产品介绍&lt;/strong&gt;&lt;/h1&gt;&lt;p&gt;&lt;strong&gt;WordPress&lt;/strong&gt;是一个以PHP和MySQL为平台的自由开源的博客软件和内容管理系统。WordPress具有插件架构和模板系统。截至2018年4月，排名前1000万的网站中超过30.6%使用WordPress。WordPress是最受欢迎的网站内容管理系统。全球有大约40%的网站(7亿5000个)都是使用WordPress架设网站的。WordPress是目前因特网上最流行的博客系统。WordPress在最著名的网络发布阶段中脱颖而出。如今，它被使用在超过7000万个站点上。&lt;/p&gt;
+&lt;h2 id=&quot;wordpress的结构&quot;&gt;&lt;a href=&quot;#wordpress的结构&quot; class=&quot;headerlink&quot; title=&quot;wordpress的结构&quot;&gt;&lt;/a&gt;wordpress的结构&lt;/h2&gt;&lt;figure class=&quot;highlight plaintext&quot;&gt;&lt;table&gt;&lt;tr&gt;&lt;td class=&quot;gutter&quot;&gt;&lt;pre&gt;&lt;span class=&quot;line&quot;&gt;1&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;2&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;3&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;4&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;5&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;6&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;7&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;8&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;9&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;10&lt;/span&gt;&lt;br&gt;&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;code&quot;&gt;&lt;pre&gt;&lt;span class=&quot;line&quot;&gt;├─wp-admin&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;├─wp-content&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;│  ├─languages&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;│  ├─plugins&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;│  ├─themes&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;├─wp-includes&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;├─index.php&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;├─wp-login.php&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;├─wp-config.php&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;├─...&lt;/span&gt;&lt;br&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;/figure&gt;
+
+&lt;ul&gt;
+&lt;li&gt;wp-admin 为后台管理文件夹&lt;/li&gt;
+&lt;li&gt;wp-content 中包含主题配置文件、插件、上传的文件、升级临时文件，该目录为易受攻击的地方&lt;/li&gt;
+&lt;li&gt;wp-includes 则是一些核心代码，包括前台代码也在这里&lt;/li&gt;
+&lt;li&gt;wp-config.php 这个文件告诉WordPress如何去连接数据库&lt;/li&gt;
+&lt;li&gt;wp-login.php 登陆文件&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h1 id=&quot;漏洞简介&quot;&gt;&lt;a href=&quot;#漏洞简介&quot; class=&quot;headerlink&quot; title=&quot;漏洞简介&quot;&gt;&lt;/a&gt;漏洞简介&lt;/h1&gt;&lt;p&gt;通过该文章&lt;a href=&quot;https://www.zerodayinitiative.com/blog/2022/1/18/cve-2021-21661-exposing-database-info-via-wordpress-sql-injection&quot;&gt;https://www.zerodayinitiative.com/blog/2022/1/18/cve-2021-21661-exposing-database-info-via-wordpress-sql-injection&lt;/a&gt; ，我大概对该漏洞情况进行了一些了解。&lt;/p&gt;
+&lt;p&gt;通常来说，Wordpress会在你所有展现的网页上运行query（查询）功能，查询不同的属性决定了你所看到页面。因此，如果你正在查看一个静态页面，WordPress的运行查询相关ID来显示页面，而如果归档页面被浏览，查询将检索该归档的所有文章。&lt;/p&gt;
+&lt;p&gt;该版本的wordpress于WP_Query处存在SQL注入漏洞。WP_Query是wordpress定义的一个类，允许开发者编写自定义查询和使用不同的参数展示文章，并可以直接查询wordpress数据库，在核心框架和插件以及主题中广泛使用。需要注意的是，一般情况下普通的用户输入无法触发该漏洞，该漏洞存在于部分调用了该WP_Query类的wordpress插件中。通过控制该类的输入参数，可以达到SQL注入的目的。&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="CVE" scheme="https://www.guestblog.xyz/categories/CVE/"/>
+    
+    
+    <category term="wordpress" scheme="https://www.guestblog.xyz/tags/wordpress/"/>
+    
+    <category term="php" scheme="https://www.guestblog.xyz/tags/php/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>JavaScript中的对象、继承及原型链学习</title>
+    <link href="https://www.guestblog.xyz/2021/07/31/OOJS/"/>
+    <id>https://www.guestblog.xyz/2021/07/31/OOJS/</id>
+    <published>2021-07-31T10:07:28.000Z</published>
+    <updated>2021-08-01T04:12:07.941Z</updated>
+    
+    
+    <summary type="html">&lt;p&gt;以前写JavaScript都是实现一些前后端的交互功能，原型链也只是做题的时候遇到了一些。很少用到JavaScript中的对象和继承，这两天学习一下。&lt;/p&gt;
+&lt;h2 id=&quot;对象&quot;&gt;&lt;a href=&quot;#对象&quot; class=&quot;headerlink&quot; title=&quot;对象&quot;&gt;&lt;/a&gt;对象&lt;/h2&gt;&lt;p&gt;在JavaScript中创建一个空对象只需通过以下语句：&lt;/p&gt;
+&lt;figure class=&quot;highlight javascript&quot;&gt;&lt;table&gt;&lt;tr&gt;&lt;td class=&quot;gutter&quot;&gt;&lt;pre&gt;&lt;span class=&quot;line&quot;&gt;1&lt;/span&gt;&lt;br&gt;&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;code&quot;&gt;&lt;pre&gt;&lt;span class=&quot;line&quot;&gt;&lt;span class=&quot;keyword&quot;&gt;var&lt;/span&gt; person = &amp;#123;&amp;#125;;&lt;/span&gt;&lt;br&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;/figure&gt;
+
+&lt;p&gt;如果是一个稍微复杂点的对象：&lt;/p&gt;
+&lt;figure class=&quot;highlight javascript&quot;&gt;&lt;table&gt;&lt;tr&gt;&lt;td class=&quot;gutter&quot;&gt;&lt;pre&gt;&lt;span class=&quot;line&quot;&gt;1&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;2&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;3&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;4&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;5&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;6&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;7&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;8&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;9&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;10&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;11&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;12&lt;/span&gt;&lt;br&gt;&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;code&quot;&gt;&lt;pre&gt;&lt;span class=&quot;line&quot;&gt;&lt;span class=&quot;keyword&quot;&gt;var&lt;/span&gt; person = &amp;#123;&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;  name : [&lt;span class=&quot;string&quot;&gt;&amp;#x27;Bob&amp;#x27;&lt;/span&gt;, &lt;span class=&quot;string&quot;&gt;&amp;#x27;Smith&amp;#x27;&lt;/span&gt;],&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;  age : &lt;span class=&quot;number&quot;&gt;32&lt;/span&gt;,&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;  gender : &lt;span class=&quot;string&quot;&gt;&amp;#x27;male&amp;#x27;&lt;/span&gt;,&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;  interests : [&lt;span class=&quot;string&quot;&gt;&amp;#x27;music&amp;#x27;&lt;/span&gt;, &lt;span class=&quot;string&quot;&gt;&amp;#x27;skiing&amp;#x27;&lt;/span&gt;],&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;  bio : &lt;span class=&quot;keyword&quot;&gt;function&lt;/span&gt;(&lt;span class=&quot;params&quot;&gt;&lt;/span&gt;) &amp;#123;&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;    &lt;span class=&quot;title function_&quot;&gt;alert&lt;/span&gt;(&lt;span class=&quot;variable language_&quot;&gt;this&lt;/span&gt;.&lt;span class=&quot;property&quot;&gt;name&lt;/span&gt;[&lt;span class=&quot;number&quot;&gt;0&lt;/span&gt;] + &lt;span class=&quot;string&quot;&gt;&amp;#x27; &amp;#x27;&lt;/span&gt; + &lt;span class=&quot;variable language_&quot;&gt;this&lt;/span&gt;.&lt;span class=&quot;property&quot;&gt;name&lt;/span&gt;[&lt;span class=&quot;number&quot;&gt;1&lt;/span&gt;] + &lt;span class=&quot;string&quot;&gt;&amp;#x27; is &amp;#x27;&lt;/span&gt; + &lt;span class=&quot;variable language_&quot;&gt;this&lt;/span&gt;.&lt;span class=&quot;property&quot;&gt;age&lt;/span&gt; + &lt;span class=&quot;string&quot;&gt;&amp;#x27; years old. He likes &amp;#x27;&lt;/span&gt; + &lt;span class=&quot;variable language_&quot;&gt;this&lt;/span&gt;.&lt;span class=&quot;property&quot;&gt;interests&lt;/span&gt;[&lt;span class=&quot;number&quot;&gt;0&lt;/span&gt;] + &lt;span class=&quot;string&quot;&gt;&amp;#x27; and &amp;#x27;&lt;/span&gt; + &lt;span class=&quot;variable language_&quot;&gt;this&lt;/span&gt;.&lt;span class=&quot;property&quot;&gt;interests&lt;/span&gt;[&lt;span class=&quot;number&quot;&gt;1&lt;/span&gt;] + &lt;span class=&quot;string&quot;&gt;&amp;#x27;.&amp;#x27;&lt;/span&gt;);&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;  &amp;#125;,&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;  &lt;span class=&quot;attr&quot;&gt;greeting&lt;/span&gt;: &lt;span class=&quot;keyword&quot;&gt;function&lt;/span&gt;(&lt;span class=&quot;params&quot;&gt;&lt;/span&gt;) &amp;#123;&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;    &lt;span class=&quot;title function_&quot;&gt;alert&lt;/span&gt;(&lt;span class=&quot;string&quot;&gt;&amp;#x27;Hi! I\&amp;#x27;m &amp;#x27;&lt;/span&gt; + &lt;span class=&quot;variable language_&quot;&gt;this&lt;/span&gt;.&lt;span class=&quot;property&quot;&gt;name&lt;/span&gt;[&lt;span class=&quot;number&quot;&gt;0&lt;/span&gt;] + &lt;span class=&quot;string&quot;&gt;&amp;#x27;.&amp;#x27;&lt;/span&gt;);&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;  &amp;#125;&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;&amp;#125;;&lt;/span&gt;&lt;br&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;/figure&gt;</summary>
+    
+    
+    
+    <category term="JavaScript" scheme="https://www.guestblog.xyz/categories/JavaScript/"/>
+    
+    
+    <category term="JavaScript" scheme="https://www.guestblog.xyz/tags/JavaScript/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>如何编译操作系统内核，并新增系统调用💡</title>
+    <link href="https://www.guestblog.xyz/2020/03/23/OSC-Experiment/"/>
+    <id>https://www.guestblog.xyz/2020/03/23/OSC-Experiment/</id>
+    <published>2020-03-23T10:12:17.000Z</published>
+    <updated>2020-03-23T10:21:34.948Z</updated>
+    
+    
+    <summary type="html">&lt;h2 id=&quot;实验内容&quot;&gt;&lt;a href=&quot;#实验内容&quot; class=&quot;headerlink&quot; title=&quot;实验内容&quot;&gt;&lt;/a&gt;实验内容&lt;/h2&gt;&lt;p&gt;已经获得了linux内核源代码。通过修改源代码，创建一个新的编号为320的系统调用，具体功能由自己指定。接着生成内核配置文件，并编译安装内核。最终使得开机时能够选择启动自己编译的内核，并成功调用新增的系统调用。&lt;/p&gt;
+&lt;h2 id=&quot;实验目的&quot;&gt;&lt;a href=&quot;#实验目的&quot; class=&quot;headerlink&quot; title=&quot;实验目的&quot;&gt;&lt;/a&gt;实验目的&lt;/h2&gt;&lt;p&gt;通过编写内核代码的方式，加深自己对操作系统内核的理解，使其概念变得不那么抽象。同时感受内核中系统调用的运作方式。&lt;/p&gt;
+&lt;h2 id=&quot;设计思路以及流程图&quot;&gt;&lt;a href=&quot;#设计思路以及流程图&quot; class=&quot;headerlink&quot; title=&quot;设计思路以及流程图&quot;&gt;&lt;/a&gt;设计思路以及流程图&lt;/h2&gt;&lt;h3 id=&quot;新增系统调用&quot;&gt;&lt;a href=&quot;#新增系统调用&quot; class=&quot;headerlink&quot; title=&quot;新增系统调用&quot;&gt;&lt;/a&gt;新增系统调用&lt;/h3&gt;&lt;p&gt;打开虚拟机，在桌面发现linux内核压缩文件，首先将其解压：&lt;/p&gt;
+&lt;figure class=&quot;highlight bash&quot;&gt;&lt;table&gt;&lt;tr&gt;&lt;td class=&quot;gutter&quot;&gt;&lt;pre&gt;&lt;span class=&quot;line&quot;&gt;1&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;2&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;3&lt;/span&gt;&lt;br&gt;&lt;/pre&gt;&lt;/td&gt;&lt;td class=&quot;code&quot;&gt;&lt;pre&gt;&lt;span class=&quot;line&quot;&gt;$ &lt;span class=&quot;built_in&quot;&gt;cd&lt;/span&gt; Desktop&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;$ tar zxvf linux-2.6.21.tar.gz&lt;/span&gt;&lt;br&gt;&lt;span class=&quot;line&quot;&gt;$ &lt;span class=&quot;built_in&quot;&gt;cd&lt;/span&gt; linux-2.6.21&lt;/span&gt;&lt;br&gt;&lt;/pre&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;/figure&gt;
+
+&lt;img src=&quot;/2020/03/23/OSC-Experiment/1.png&quot; class=&quot;&quot;&gt;
+
+&lt;p&gt;接着可以看到解压好的内核。&lt;/p&gt;
+&lt;p&gt;我们开始尝试新增一个320号系统调用。&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="OS" scheme="https://www.guestblog.xyz/categories/OS/"/>
+    
+    
+    <category term="OS" scheme="https://www.guestblog.xyz/tags/OS/"/>
+    
+    <category term="Linux" scheme="https://www.guestblog.xyz/tags/Linux/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>PHP中为什么fopen()函数能以路径为参数创建文件?🐘</title>
+    <link href="https://www.guestblog.xyz/2020/03/21/phpvuln/"/>
+    <id>https://www.guestblog.xyz/2020/03/21/phpvuln/</id>
+    <published>2020-03-21T02:41:12.000Z</published>
+    <updated>2020-03-23T10:14:40.880Z</updated>
+    
+    
+    <summary type="html">&lt;p&gt;之所以写这一篇博客，是因为XCTF攻防世界的一道题目：ics-07。&lt;/p&gt;
+&lt;h2 id=&quot;题目&quot;&gt;&lt;a href=&quot;#题目&quot; class=&quot;headerlink&quot; title=&quot;题目&quot;&gt;&lt;/a&gt;题目&lt;/h2&gt;&lt;p&gt;先来看看题目，我的疑惑也是在做题的时候产生的。&lt;/p&gt;
+&lt;p&gt;点进去是一个平台管理中心页面，试了下发现只有“项目管理”一栏是可以点的，点进去的页面如下：&lt;/p&gt;
+&lt;img src=&quot;/2020/03/21/phpvuln/1.png&quot; class=&quot;&quot;&gt;
+
+&lt;p&gt;乍一看以为是sql注入，但是留意到下面的view-source按钮，点开来看，获得了源代码。&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="php" scheme="https://www.guestblog.xyz/categories/php/"/>
+    
+    
+    <category term="php" scheme="https://www.guestblog.xyz/tags/php/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>实现vscode+Xdebug调试php🐘</title>
+    <link href="https://www.guestblog.xyz/2020/02/25/Xdebug-php/"/>
+    <id>https://www.guestblog.xyz/2020/02/25/Xdebug-php/</id>
+    <published>2020-02-25T06:47:43.000Z</published>
+    <updated>2020-03-24T02:54:05.477Z</updated>
+    
+    
+    <summary type="html">&lt;p&gt;昨天在看thinkphp5.0的远程执行代码漏洞，由于里面的类和方法实在是有点多，看别人的博客感觉不够，便想着自己把代码clone下来调试一下。由于以前调试的php基本都是单个的php脚本，&lt;code&gt;var_dump&lt;/code&gt;和&lt;code&gt;echo&lt;/code&gt;就能解决大多数问题，所以一直没试过单步调试php。这次我决定配置vscode使其可以调试大型的php项目。&lt;/p&gt;
+&lt;h2 id=&quot;php集成开发环境&quot;&gt;&lt;a href=&quot;#php集成开发环境&quot; class=&quot;headerlink&quot; title=&quot;php集成开发环境&quot;&gt;&lt;/a&gt;php集成开发环境&lt;/h2&gt;&lt;p&gt;首先是php的集成开发环境，我以前用的是&lt;strong&gt;phpStudy&lt;/strong&gt;，挺方便，但是因为phpStudy对surface的分辨率适配没做好，每次打开窗口字体都特别小，调到正常大小以后又特别模糊。所以最近换成了&lt;strong&gt;wampserver&lt;/strong&gt;。安装好wampserver，打开启动apache服务。&lt;/p&gt;
+&lt;h2 id=&quot;VSCode&quot;&gt;&lt;a href=&quot;#VSCode&quot; class=&quot;headerlink&quot; title=&quot;VSCode&quot;&gt;&lt;/a&gt;VSCode&lt;/h2&gt;&lt;p&gt;vscode需要安装两个插件，PHP Debug和PHP Intelephense。前者用来调试程序，后者提供一些语法补全和代码高亮等功能。&lt;/p&gt;
+&lt;img src=&quot;/2020/02/25/Xdebug-php/plugin.png&quot; class=&quot;&quot;&gt;</summary>
+    
+    
+    
+    <category term="php" scheme="https://www.guestblog.xyz/categories/php/"/>
+    
+    
+    <category term="php" scheme="https://www.guestblog.xyz/tags/php/"/>
+    
+    <category term="vscode" scheme="https://www.guestblog.xyz/tags/vscode/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>wsl2闪退及出现“参考的对象类型不支持尝试的操作”的解决方法</title>
+    <link href="https://www.guestblog.xyz/2020/02/21/wsl2problem/"/>
+    <id>https://www.guestblog.xyz/2020/02/21/wsl2problem/</id>
+    <published>2020-02-21T14:15:58.000Z</published>
+    <updated>2020-02-25T07:30:20.797Z</updated>
+    
+    
+      
+      
+        
+        
+    <summary type="html">&lt;p&gt;因为用的是windows insider</summary>
+        
+      
+    
+    
+    
+    
+    <category term="wsl2" scheme="https://www.guestblog.xyz/tags/wsl2/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>数据结构随笔2📝</title>
+    <link href="https://www.guestblog.xyz/2019/12/20/DataStructure2/"/>
+    <id>https://www.guestblog.xyz/2019/12/20/DataStructure2/</id>
+    <published>2019-12-20T11:50:19.000Z</published>
+    <updated>2020-02-25T14:22:55.948Z</updated>
+    
+    
+    <summary type="html">&lt;p&gt;内容来源凯哥的数据结构课以及ppt。&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="数据结构" scheme="https://www.guestblog.xyz/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/"/>
+    
+    
+    <category term="数据结构" scheme="https://www.guestblog.xyz/tags/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>Hexo-next主题V7.5的配置文件修改(调整成V5.0的内容框宽度)🎈</title>
+    <link href="https://www.guestblog.xyz/2019/12/08/modify-blog/"/>
+    <id>https://www.guestblog.xyz/2019/12/08/modify-blog/</id>
+    <published>2019-12-07T18:44:03.000Z</published>
+    <updated>2020-02-25T08:34:09.430Z</updated>
+    
+    
+      
+      
+        
+        
+    <summary type="html">&lt;p&gt;由于之前安装的next版本是最新的7.5，很多地方比起5.0发生了蛮大的变化，主要是字体变大以及文章内容框变宽导致看得很不习惯，于是自己开始谷歌并修改配置文件。&lt;/p&gt;
+&lt;!-- more </summary>
+        
+      
+    
+    
+    
+    <category term="博客" scheme="https://www.guestblog.xyz/categories/%E5%8D%9A%E5%AE%A2/"/>
+    
+    
+    <category term="博客" scheme="https://www.guestblog.xyz/tags/%E5%8D%9A%E5%AE%A2/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>数据结构随笔💡</title>
+    <link href="https://www.guestblog.xyz/2019/12/06/DataStructure1/"/>
+    <id>https://www.guestblog.xyz/2019/12/06/DataStructure1/</id>
+    <published>2019-12-06T01:24:57.000Z</published>
+    <updated>2020-02-25T06:49:57.629Z</updated>
+    
+    
+    <summary type="html">&lt;p&gt;数据结构课也算是一学期快要上完了，尽管凯哥吹了一学期的牛，似乎并没有讲什么数据结构方面具体的知识，但我感觉一学期下来收获良多。可能是因为凯哥讲课比较注重方法论，许多具体的点，尽管不细讲，但他会跟我们讲明白原理，讲一些计算机的底层的架构，我觉得这些对我思想方面的提升是巨大的。我觉得数据结构这门课在凯哥的引导以及自学下慢慢领悟到了一些思想了。有的时候看凯哥其实更像一个计组老师，我很感激他。&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="数据结构" scheme="https://www.guestblog.xyz/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/"/>
+    
+    
+    <category term="数据结构" scheme="https://www.guestblog.xyz/tags/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>搭建hexo博客、配置next主题踩的无数坑🤦‍♂️</title>
+    <link href="https://www.guestblog.xyz/2019/11/09/build-blog/"/>
+    <id>https://www.guestblog.xyz/2019/11/09/build-blog/</id>
+    <published>2019-11-09T04:05:17.000Z</published>
+    <updated>2020-02-24T15:56:51.207Z</updated>
+    
+    
+    <summary type="html">&lt;p&gt;昨天折腾一晚上总算是把hexo的博客搭出来了，由于同之前的hugo差异很大，在这过程中踩了无数坑。&lt;/p&gt;
+&lt;p&gt;首先是next的版本，原先在next作者issnan的网站上下载的next是5.1.4版本的，结果运行的过程中控制台一直发提醒，才发现next官方的github上已经是7.0.0版本了，因此又重新下载了一次。&lt;/p&gt;
+&lt;p&gt;接着是本地调试，本地调试很顺利，几乎没有遇到什么坑。&lt;/p&gt;
+&lt;p&gt;为了修改自己的配置，打开_config.yml开始改参数。&lt;/p&gt;
+&lt;h5 id=&quot;顺着文档一条一条来，不懂的看别人博客、看注释。&quot;&gt;&lt;a href=&quot;#顺着文档一条一条来，不懂的看别人博客、看注释。&quot; class=&quot;headerlink&quot; title=&quot;顺着文档一条一条来，不懂的看别人博客、看注释。&quot;&gt;&lt;/a&gt;顺着文档一条一条来，不懂的看别人博客、看注释。&lt;/h5&gt;</summary>
+    
+    
+    
+    <category term="博客" scheme="https://www.guestblog.xyz/categories/%E5%8D%9A%E5%AE%A2/"/>
+    
+    
+    <category term="博客" scheme="https://www.guestblog.xyz/tags/%E5%8D%9A%E5%AE%A2/"/>
+    
+    <category term="github" scheme="https://www.guestblog.xyz/tags/github/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>Welcome to my blog! 😜</title>
+    <link href="https://www.guestblog.xyz/2019/11/07/welcome/"/>
+    <id>https://www.guestblog.xyz/2019/11/07/welcome/</id>
+    <published>2019-11-07T13:41:10.000Z</published>
+    <updated>2022-07-31T06:46:34.182Z</updated>
+    
+    
+      
+      
+        
+        
+    <summary type="html">&lt;p&gt;欢迎来到我的博客 :</summary>
+        
+      
+    
+    
+    
+    <category term="随笔" scheme="https://www.guestblog.xyz/categories/%E9%9A%8F%E7%AC%94/"/>
+    
+    
+    <category term="life" scheme="https://www.guestblog.xyz/tags/life/"/>
+    
+  </entry>
+  
+</feed>

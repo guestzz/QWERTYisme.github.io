@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.2.0">
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/Blinky.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/Blinky.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.1.1/css/all.min.css" integrity="sha256-DfWjNxDkM94fVBWx1H5BMMp0Zq7luBlV8QRcSES7s+0=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"www.guestblog.xyz","root":"/","images":"/images","scheme":"Pisces","darkmode":false,"version":"8.12.2","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12},"copycode":{"enable":false,"style":null},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"Searching...","empty":"We didn't find any results for the search: ${query}","hits_time":"${hits} results found in ${time} ms","hits":"${hits} results found"}}</script><script src="/js/config.js"></script>
+
+    <meta name="description" content="实验内容已经获得了linux内核源代码。通过修改源代码，创建一个新的编号为320的系统调用，具体功能由自己指定。接着生成内核配置文件，并编译安装内核。最终使得开机时能够选择启动自己编译的内核，并成功调用新增的系统调用。 实验目的通过编写内核代码的方式，加深自己对操作系统内核的理解，使其概念变得不那么抽象。同时感受内核中系统调用的运作方式。 设计思路以及流程图新增系统调用打开虚拟机，在桌面发现lin">
+<meta property="og:type" content="article">
+<meta property="og:title" content="如何编译操作系统内核，并新增系统调用💡">
+<meta property="og:url" content="https://www.guestblog.xyz/2020/03/23/OSC-Experiment/index.html">
+<meta property="og:site_name" content="Guest&#39;s Blog">
+<meta property="og:description" content="实验内容已经获得了linux内核源代码。通过修改源代码，创建一个新的编号为320的系统调用，具体功能由自己指定。接着生成内核配置文件，并编译安装内核。最终使得开机时能够选择启动自己编译的内核，并成功调用新增的系统调用。 实验目的通过编写内核代码的方式，加深自己对操作系统内核的理解，使其概念变得不那么抽象。同时感受内核中系统调用的运作方式。 设计思路以及流程图新增系统调用打开虚拟机，在桌面发现lin">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://www.guestblog.xyz/2020/03/23/OSC-Experiment/1.png">
+<meta property="og:image" content="https://www.guestblog.xyz/2020/03/23/OSC-Experiment/2.png">
+<meta property="og:image" content="https://www.guestblog.xyz/2020/03/23/OSC-Experiment/3.png">
+<meta property="og:image" content="https://www.guestblog.xyz/2020/03/23/OSC-Experiment/4.png">
+<meta property="og:image" content="https://www.guestblog.xyz/2020/03/23/OSC-Experiment/5.png">
+<meta property="og:image" content="https://www.guestblog.xyz/2020/03/23/OSC-Experiment/14.png">
+<meta property="og:image" content="https://www.guestblog.xyz/2020/03/23/OSC-Experiment/6.png">
+<meta property="og:image" content="https://www.guestblog.xyz/2020/03/23/OSC-Experiment/7.png">
+<meta property="og:image" content="https://www.guestblog.xyz/2020/03/23/OSC-Experiment/8.png">
+<meta property="og:image" content="https://www.guestblog.xyz/2020/03/23/OSC-Experiment/9.png">
+<meta property="og:image" content="https://www.guestblog.xyz/2020/03/23/OSC-Experiment/10.png">
+<meta property="og:image" content="https://www.guestblog.xyz/2020/03/23/OSC-Experiment/11.png">
+<meta property="og:image" content="https://www.guestblog.xyz/2020/03/23/OSC-Experiment/12.png">
+<meta property="og:image" content="https://www.guestblog.xyz/2020/03/23/OSC-Experiment/13.png">
+<meta property="article:published_time" content="2020-03-23T10:12:17.000Z">
+<meta property="article:modified_time" content="2020-03-23T10:21:34.948Z">
+<meta property="article:author" content="Guest">
+<meta property="article:tag" content="OS">
+<meta property="article:tag" content="Linux">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://www.guestblog.xyz/2020/03/23/OSC-Experiment/1.png">
+
+
+<link rel="canonical" href="https://www.guestblog.xyz/2020/03/23/OSC-Experiment/">
+
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"en","comments":true,"permalink":"https://www.guestblog.xyz/2020/03/23/OSC-Experiment/","path":"2020/03/23/OSC-Experiment/","title":"如何编译操作系统内核，并新增系统调用💡"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>如何编译操作系统内核，并新增系统调用💡 | Guest's Blog</title>
+  
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Guest's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>About</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags<span class="badge">11</span></a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories<span class="badge">7</span></a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives<span class="badge">11</span></a></li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+        
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%AE%9E%E9%AA%8C%E5%86%85%E5%AE%B9"><span class="nav-number">1.</span> <span class="nav-text">实验内容</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%AE%9E%E9%AA%8C%E7%9B%AE%E7%9A%84"><span class="nav-number">2.</span> <span class="nav-text">实验目的</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%AE%BE%E8%AE%A1%E6%80%9D%E8%B7%AF%E4%BB%A5%E5%8F%8A%E6%B5%81%E7%A8%8B%E5%9B%BE"><span class="nav-number">3.</span> <span class="nav-text">设计思路以及流程图</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%96%B0%E5%A2%9E%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8"><span class="nav-number">3.1.</span> <span class="nav-text">新增系统调用</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E9%87%8D%E6%96%B0%E7%BC%96%E8%AF%91%E5%86%85%E6%A0%B8"><span class="nav-number">3.2.</span> <span class="nav-text">重新编译内核</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%BA%90%E7%A8%8B%E5%BA%8F%E4%BB%A5%E5%8F%8A%E6%B3%A8%E9%87%8A"><span class="nav-number">4.</span> <span class="nav-text">源程序以及注释</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%A8%8B%E5%BA%8F%E8%BF%90%E8%A1%8C%E7%BB%93%E6%9E%9C"><span class="nav-number">5.</span> <span class="nav-text">程序运行结果</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%AE%9E%E9%AA%8C%E4%BD%93%E4%BC%9A"><span class="nav-number">6.</span> <span class="nav-text">实验体会</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%85%B3%E4%BA%8E%E5%86%85%E6%A0%B8"><span class="nav-number">6.1.</span> <span class="nav-text">关于内核</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%86%85%E6%A0%B8%E6%80%81%E5%92%8C%E7%94%A8%E6%88%B7%E6%80%81"><span class="nav-number">6.2.</span> <span class="nav-text">内核态和用户态</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%86%99%E5%9C%A8%E6%9C%80%E5%90%8E"><span class="nav-number">6.3.</span> <span class="nav-text">写在最后</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author site-overview-item animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Guest"
+      src="/images/duck2.jpg">
+  <p class="site-author-name" itemprop="name">Guest</p>
+  <div class="site-description" itemprop="description">web🐶</div>
+</div>
+<div class="site-state-wrap site-overview-item animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">11</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">7</span>
+        <span class="site-state-item-name">categories</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">11</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author site-overview-item animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/QWERTYisme" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;QWERTYisme" rel="noopener" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:Roywangjiahe@outlook.com" title="E-Mail → mailto:Roywangjiahe@outlook.com" rel="noopener" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+
+
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="sidebar-dimmer"></div>
+
+
+    </header>
+
+    
+  <div class="back-to-top" role="button" aria-label="Back to top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+  <a href="https://github.com/QWERTYisme" class="github-corner" title="Follow me on GitHub" aria-label="Follow me on GitHub" rel="noopener" target="_blank"><svg width="80" height="80" viewBox="0 0 250 250" aria-hidden="true"><path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="en">
+    <link itemprop="mainEntityOfPage" href="https://www.guestblog.xyz/2020/03/23/OSC-Experiment/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/duck2.jpg">
+      <meta itemprop="name" content="Guest">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Guest's Blog">
+      <meta itemprop="description" content="web🐶">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="如何编译操作系统内核，并新增系统调用💡 | Guest's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          如何编译操作系统内核，并新增系统调用💡
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+      
+
+      <time title="Created: 2020-03-23 18:12:17 / Modified: 18:21:34" itemprop="dateCreated datePublished" datetime="2020-03-23T18:12:17+08:00">2020-03-23</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">In</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/OS/" itemprop="url" rel="index"><span itemprop="name">OS</span></a>
+        </span>
+    </span>
+
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+        <h2 id="实验内容"><a href="#实验内容" class="headerlink" title="实验内容"></a>实验内容</h2><p>已经获得了linux内核源代码。通过修改源代码，创建一个新的编号为320的系统调用，具体功能由自己指定。接着生成内核配置文件，并编译安装内核。最终使得开机时能够选择启动自己编译的内核，并成功调用新增的系统调用。</p>
+<h2 id="实验目的"><a href="#实验目的" class="headerlink" title="实验目的"></a>实验目的</h2><p>通过编写内核代码的方式，加深自己对操作系统内核的理解，使其概念变得不那么抽象。同时感受内核中系统调用的运作方式。</p>
+<h2 id="设计思路以及流程图"><a href="#设计思路以及流程图" class="headerlink" title="设计思路以及流程图"></a>设计思路以及流程图</h2><h3 id="新增系统调用"><a href="#新增系统调用" class="headerlink" title="新增系统调用"></a>新增系统调用</h3><p>打开虚拟机，在桌面发现linux内核压缩文件，首先将其解压：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ <span class="built_in">cd</span> Desktop</span><br><span class="line">$ tar zxvf linux-2.6.21.tar.gz</span><br><span class="line">$ <span class="built_in">cd</span> linux-2.6.21</span><br></pre></td></tr></table></figure>
+
+<img src="/2020/03/23/OSC-Experiment/1.png" class="">
+
+<p>接着可以看到解压好的内核。</p>
+<p>我们开始尝试新增一个320号系统调用。</p>
+<span id="more"></span>
+
+<p>打开终端，cd到内核目录，使用vi编辑arch&#x2F;i386&#x2F;kernel&#x2F;syscall_table.S，在尾部加上psta系统调用。</p>
+<img src="/2020/03/23/OSC-Experiment/2.png" class="">
+
+<p>然后我们在include&#x2F;linux目录下添加psta.h头文件：</p>
+<img src="/2020/03/23/OSC-Experiment/3.png" class="">
+
+<p>其中nice是标志符，当其为0时代表没有调用，当成功调用该syscall时将其置为1。</p>
+<p>接着，修改include&#x2F;linux目录下的Kbuild文件，将psta.h添加进去：</p>
+<img src="/2020/03/23/OSC-Experiment/4.png" class="">
+
+<p>在kernel目录下新建文件psta.c，在该文件中实现sys_psta函数：</p>
+<p>这是我自己写的psta.c，其内容将在后文分析。</p>
+<img src="/2020/03/23/OSC-Experiment/5.png" class="">
+
+<p>修改文件kernel&#x2F;Makefile，使得psta.c在编译时可见：</p>
+<img src="/2020/03/23/OSC-Experiment/14.png" class="">
+
+<p>在include&#x2F;asm-i386&#x2F;unistd.h里加上系统调用号的宏定义：</p>
+<img src="/2020/03/23/OSC-Experiment/6.png" class="">
+
+<p>修改include&#x2F;linux&#x2F;syscalls.h，加上函数sys_psta的声明。</p>
+<p>声明pinfo结构体：</p>
+<img src="/2020/03/23/OSC-Experiment/7.png" class="">
+
+<p>添加psta.h头文件：</p>
+<img src="/2020/03/23/OSC-Experiment/8.png" class="">
+
+<p>末尾添加函数声明：</p>
+<img src="/2020/03/23/OSC-Experiment/9.png" class="">
+
+<h3 id="重新编译内核"><a href="#重新编译内核" class="headerlink" title="重新编译内核"></a>重新编译内核</h3><p>生成内核配置文件：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ make mrproper</span><br><span class="line">$ <span class="built_in">cp</span> /boot/config-`<span class="built_in">uname</span> -r` ./config</span><br></pre></td></tr></table></figure>
+
+<p>make mrproper保证内核树是干净的，这会删除.config文件，然后通过第二条命令将当前运行的内核config文件复制到自己编写的内核目录下。其中&#96;&#96;符号代表bash执行返回结果，也就是说实际上返回的版本号拼接上config-就是config文件名。</p>
+<blockquote>
+<p>Linux采用了双树系统。一个树是稳定树（stable tree），另一个树是非稳定树（unstable tree）或者开发树（development tree）。一些新特性、实验性改进等都将首先在开发树中进行。如果在开发树中所做的改进也可以应用于稳定树，那么在开发树中经过测试以后，在稳定树中将进行相同的改进。一旦开发树经过了足够的发展，开发树就会成为新的稳定树。</p>
+<p>参考链接：<a target="_blank" rel="noopener" href="https://blog.csdn.net/zhenguo26/article/details/79641322">https://blog.csdn.net/zhenguo26/article/details/79641322</a></p>
+</blockquote>
+<p>接着更新config文件：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ make oldconfig</span><br></pre></td></tr></table></figure>
+
+<p>更改Makefile文件，定义自己的内核版本号，我将其设置为-seu。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">EXTRAVERSION = -seu</span><br></pre></td></tr></table></figure>
+
+<p>最后编译安装内核：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ make all</span><br><span class="line">$ su</span><br><span class="line">$ make modules_install</span><br><span class="line">$ make install</span><br><span class="line">$ make headers_install</span><br></pre></td></tr></table></figure>
+
+<p>重启系统：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ reboot</span><br></pre></td></tr></table></figure>
+
+<p>可以发现启动页面以及有了我们编译的新内核。</p>
+<img src="/2020/03/23/OSC-Experiment/10.png" class="">
+
+<p>打开终端，执行<code>uname -r</code>命令，可以验证我们的内核版本确实已经切换。</p>
+<img src="/2020/03/23/OSC-Experiment/11.png" class="">
+
+<p>这时候开始验证我们的代码是否起能成功调用我们写的320号system call。</p>
+<h2 id="源程序以及注释"><a href="#源程序以及注释" class="headerlink" title="源程序以及注释"></a>源程序以及注释</h2><p>以下是psta.c的源代码：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/kernel.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/linkage.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/types.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/sched.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;linux/psta.h&gt;</span></span></span><br><span class="line"></span><br><span class="line">asmlinkage <span class="type">int</span> <span class="title function_">sys_psta</span><span class="params">(<span class="keyword">struct</span> pinfo *buf)</span> &#123;</span><br><span class="line"></span><br><span class="line">	<span class="comment">//nice=1 represents system call is successfully invoked</span></span><br><span class="line">    buf-&gt;nice = <span class="number">1</span>;			</span><br><span class="line">	printk(<span class="string">&quot;This system call is successfully running!\n&quot;</span>);</span><br><span class="line">    </span><br><span class="line">    <span class="comment">//print the pid into system log</span></span><br><span class="line">	printk(<span class="string">&quot;The pid of the process that invoked this system call is %d\n&quot;</span>,buf-&gt;pid);</span><br><span class="line">    </span><br><span class="line">    <span class="comment">//print the uid into system log</span></span><br><span class="line">	printk(<span class="string">&quot;The uid of the user that invoked this system call is %d\n&quot;</span>,buf-&gt;uid);		</span><br><span class="line">	<span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>可以看到在320号system call中，将传入的pinfo结构体的nice变量赋值为1，代表成功调用了。并在内核日志中打印调用该system call进程的pid以及用户的uid。下面继续来看测试代码：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span><span class="string">&lt;sys/syscall.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span><span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span><span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span><span class="string">&lt;linux/psta.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">()</span></span><br><span class="line">&#123;	</span><br><span class="line">	<span class="built_in">printf</span>(<span class="string">&quot;The pid of current process is %d\n&quot;</span>,getpid());	</span><br><span class="line">	<span class="built_in">printf</span>(<span class="string">&quot;The current uid is %d\n&quot;</span>,getuid());	</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">pinfo</span> <span class="title">info</span>;</span></span><br><span class="line">    </span><br><span class="line">    <span class="comment">//initialize variable nice with 0</span></span><br><span class="line">	info.nice = <span class="number">0</span>;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">//obtain the pid and uid</span></span><br><span class="line">	info.pid = getpid();</span><br><span class="line">	info.uid = getuid();</span><br><span class="line">    </span><br><span class="line">    <span class="comment">//if the system call is successfully invoked, the return value of ret will be 0</span></span><br><span class="line">	<span class="type">int</span> ret = syscall(<span class="number">320</span>,&amp;info);</span><br><span class="line">	<span class="built_in">printf</span>(<span class="string">&quot;0 represents this system call is successfully invoked,ret:%d\n&quot;</span>,ret);</span><br><span class="line">	<span class="built_in">printf</span>(<span class="string">&quot;The system call change the value of nice into:%d\n&quot;</span>,info.nice);	</span><br><span class="line">	<span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>也就是说，我们的预期结果是：</p>
+<ul>
+<li>nice变量的值通过系统调用变成了1</li>
+<li>ret变量返回0，代表成功调用320号system call，否则返回-1</li>
+<li>内核日志中打印出的pid与uid与程序输出一致</li>
+</ul>
+<h2 id="程序运行结果"><a href="#程序运行结果" class="headerlink" title="程序运行结果"></a>程序运行结果</h2><p>下面是运行结果：</p>
+<img src="/2020/03/23/OSC-Experiment/12.png" class="">
+
+<p>可以看出：</p>
+<ul>
+<li>当权限为用户时，当前uid是500，程序的进程号为3951</li>
+<li>当权限为管理员时，当前uid是0，程序的进程号是3971</li>
+<li>两次的nice值均改变为1</li>
+<li>两次的ret值均返回0</li>
+</ul>
+<p>再来看内核日志：</p>
+<img src="/2020/03/23/OSC-Experiment/13.png" class="">
+
+<p>内核日志与程序输出结果相符，实验成功。</p>
+<h2 id="实验体会"><a href="#实验体会" class="headerlink" title="实验体会"></a>实验体会</h2><p>这次操作系统实验是我第一次在内核态编程，过程很繁琐复杂，但同时也受益匪浅。在实验的过程中，我遇到了很多的bug，以及各种奇怪的编译错误，甚至虚拟机无法启动得推倒重来。即便如此，最终还是通过百度谷歌各种方式一一解决了bug。下面是我的个人的一些体悟。</p>
+<h3 id="关于内核"><a href="#关于内核" class="headerlink" title="关于内核"></a>关于内核</h3><p>我觉得内核是连接用户程序与硬件的一个桥梁，在用户态写代码时，我们只能调用内核给定好的system call进行操作。而各种system call的功能是相对安全的，用户不能直接对底层硬件进行操作，因此内核一个很重要的功能就是让用户的操作更加规范且安全，这是一个保护机制。</p>
+<p>linux是开源的，我们可以在操作规范的前提下编写自己的内核，打开内核目录，可以看到各式各样的.h以及.c文件，这些都是最底层的系统api，因此编写的时候必须十分谨慎，稍有不慎就可能导致系统崩溃。</p>
+<p>同时，编译内核也是一个繁琐的过程，每一次更改自己编写的系统调用，make all都需要等待相当长的时间，因为编译器需要对整一个内核进行重新编译、链接。</p>
+<h3 id="内核态和用户态"><a href="#内核态和用户态" class="headerlink" title="内核态和用户态"></a>内核态和用户态</h3><p>在编写system call的过程中，我有许多想实现的功能没法实现，经过百度，我发现这是因为内核态和用户态的不同而导致的。</p>
+<p>例如，在psta.c中，开始我希望能够获取当前进程的pid，并将其存放在pinfo的pid变量中。我尝试使用getpid()，但编译提示说找不到头文件。原来，linux下的C库在内核态下是无法使用的，这些C库包含的是已经封装好system call的函数，只能在用户态下使用。而内核态显然是更底层的，因此在内核态无法使用用户态的C库和各种函数。而如果想要在内核态中使用用户态的某些功能，就必须找到内核中对应的头文件和函数。在linux内核中有一个宏current，current-&gt;pid即指向当前的pid。为此我尝试了使用current，但是失败了，最后返回的结果是一个负数，但我始终没能找出原因。</p>
+<p>再例如，在内核程序中我们没法通过include&lt;stdio.h&gt;来使用printf函数，取而代之的是printk，这个函数可以将消息打印在内核日志中。</p>
+<h3 id="写在最后"><a href="#写在最后" class="headerlink" title="写在最后"></a>写在最后</h3><p>Linux内核是一个复杂而精细的东西，在使用修改的过程中必须要十分小心，但这也是Linux内核的魅力所在。有次在编译的过程中，由于没有重新生成内核配置文件就编译，出了很多莫名其妙的错误，到最后才发现。Linux的维护者在编写内核代码时想必也是十分小心的，我想，如果底层api中出现了漏洞，那么黑客就很可能会通过编写恶意的漏洞利用程序来进行攻击。因此，阅读内核代码，可以体会到Linux维护者是如何编写高效而安全的程序的。自己编写系统调用，在确保安全的前提下，可以提升系统中某些功能的运行效率，若想实现某一功能，只需调用我们自己编写的system call，而不用通过用户态函数。这样效率将极大提升。</p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="followme">
+  <span>Welcome to my other publishing channels</span>
+
+  <div class="social-list">
+
+      <div class="social-item">
+        <a target="_blank" class="social-link" href="/atom.xml">
+          <span class="icon">
+            <i class="fa fa-rss"></i>
+          </span>
+
+          <span class="label">RSS</span>
+        </a>
+      </div>
+  </div>
+</div>
+
+          <div class="post-tags">
+              <a href="/tags/OS/" rel="tag"># OS</a>
+              <a href="/tags/Linux/" rel="tag"># Linux</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2020/03/21/phpvuln/" rel="prev" title="PHP中为什么fopen()函数能以路径为参数创建文件?🐘">
+                  <i class="fa fa-chevron-left"></i> PHP中为什么fopen()函数能以路径为参数创建文件?🐘
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2021/07/31/OOJS/" rel="next" title="JavaScript中的对象、继承及原型链学习">
+                  JavaScript中的对象、继承及原型链学习 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+
+<div class="copyright">
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Guest</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a>
+  </div>
+
+    </div>
+  </footer>
+
+  
+  <script src="https://cdn.jsdelivr.net/npm/animejs@3.2.1/lib/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous"></script>
+<script src="/js/comments.js"></script><script src="/js/utils.js"></script><script src="/js/motion.js"></script><script src="/js/next-boot.js"></script>
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+</body>
+</html>
